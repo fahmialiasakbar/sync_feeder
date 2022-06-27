@@ -9,7 +9,9 @@ $credentials = "user = postgres password=root";
 $url         = '192.168.4.28:8082/syncserver/server.php?q=push_data_server';
 
 $count_per_batch = 30;
-$primaries = ['id_smt', 'id_sms'];
+$primary_key_1 = 'id_smt';
+$primary_key_2 = 'id_sms';
+$primaries = [$primary_key_1, $primary_key_2];
 
 $conn = pg_connect("$host $port $dbname $credentials");
 if (!$conn) {
@@ -31,6 +33,7 @@ while ($row = pg_fetch_row($res)) {
 
 $length = count($rows);
 $batch = ceil($length / $count_per_batch);
+
 $post = [
     'schema' => $schema,
     'table' => $table,
@@ -38,7 +41,14 @@ $post = [
     'struktur' => $structures
 ];
 
+echo "---------Syncronization Start----------<br/>";
+
+if (empty($rows)) {
+    echo "-------------No Data Sent--------------<br/>";
+}
+
 for ($i = 1; $i <= $batch; $i++) {
+    $updated = 0;
     $rows_send = [];
     for ($j = $count_per_batch * ($i - 1); $j < $count_per_batch * $i; $j++) {
         if (!empty($rows[$j])) {
@@ -66,9 +76,20 @@ for ($i = 1; $i <= $batch; $i++) {
         echo "Error $encoded_result->error_code : $encoded_result->error_desc";
     }
 
+    foreach ($rows_send as $row) {
+        $res = pg_update($conn, $table, ['last_sync' => date("Y-m-d h:i:s")], [$primary_key_1 => $row[0], $primary_key_2 => $row[1]]);
+        if ($res) {
+            $updated += 1;
+        }
+    }
+
     echo "Success : " . $encoded_result->data->success->total . ", Failed : " . $encoded_result->data->failed->total . "<br/>";
+    echo "Update last_sync on " . $updated . " data <br/>";
     echo "--------------------------------------<br/>";
 }
+
+echo "---------Syncronization Finish----------<br/>";
+
 
 ?>
 <br>
